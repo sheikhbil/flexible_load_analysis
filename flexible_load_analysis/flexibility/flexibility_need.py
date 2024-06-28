@@ -34,11 +34,21 @@ class OverloadEvent:
         self.duration_h = util.duration_to_hours(dt_duration)
 
         # Power-metrics
-        self.fl_spike = np.max(ts_overload_event[:,1]) - fl_power_limit
+        fl_peak_surplus = np.max(ts_overload_event[:, 1]) - fl_power_limit
+        self.fl_spike = max(
+            fl_peak_surplus, 0
+        )  # Negative overload (surplus capacity) not considered
+
         fl_energy = 0
         fl_rms_load = 0
         for i in range(1, len(ts_overload_event)):  # Max Riemann-sum
-            fl_max_overload = max(ts_overload_event[i - 1, 1], ts_overload_event[i, 1]) - fl_power_limit
+            fl_max_load_surplus = (
+                max(ts_overload_event[i - 1, 1], ts_overload_event[i, 1])
+                - fl_power_limit
+            )
+            fl_max_overload = max(
+                fl_max_load_surplus, 0
+            )  # Negative overload (surplus capacity) not considered
 
             # Can be simplified if hour-requirement is assumed
             dt_dur = (ts_overload_event[i, 0] - ts_overload_event[i - 1, 0])
