@@ -6,14 +6,32 @@ def remove_unimportant_overloads(l_overloads):
     return list(filter(lambda o: not o.is_unimportant(), l_overloads))
 
 class OverloadEvent:
+    """Storage of metrics associated with a single event of __potentially__ overloaded line
+
+    Attributes:
+        dt_start (datetime) : Starting time of event
+        dt_end (datetime) : Ending time of event
+        duration_h (int) : Duration of event in hours
+        fl_spike (float) : Highest observed overload during the event
+        fl_surplus_energy_MWh (float) : Total energy above the allowed power limit
+        fl_rms_load (float) : RMS power demand during event
+        percentage_overload (float) : Percentage of RMS power above limit
+        fl_ramping (float) : Approximate ramping speed up to peak overload
+    """
 
     def __init__(self, ts_overload_event, fl_power_limit) -> None:
-        
+        """Calculate metrics associated with an event
+
+        Args:
+            ts_overload_event (timeseries) : Load during event
+            fl_power_limit (float) : Power limit of line in question during the event
+        """
+
         # Time-metrics
         self.dt_start = ts_overload_event[0,0]
         self.dt_end = ts_overload_event[-1,0]
-        self.dt_duration = self.dt_end - self.dt_start
-        self.duration_h = util.duration_to_hours(self.dt_duration)
+        dt_duration = self.dt_end - self.dt_start
+        self.duration_h = util.duration_to_hours(dt_duration)
 
         # Power-metrics
         self.fl_spike = np.max(ts_overload_event[:,1]) - fl_power_limit
@@ -21,40 +39,59 @@ class OverloadEvent:
         fl_rms_load = 0
         for i in range(1, len(ts_overload_event)):  # Max Riemann-sum
             fl_max_overload = max(ts_overload_event[i - 1, 1], ts_overload_event[i, 1]) - fl_power_limit
-            
+
             # Can be simplified if hour-requirement is assumed
             dt_dur = (ts_overload_event[i, 0] - ts_overload_event[i - 1, 0])
             fl_dur = util.duration_to_hours(dt_dur)
 
             fl_energy += fl_max_overload * fl_dur
             fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
-        self.fl_MWh = fl_energy
+        self.fl_surplus_energy_MWh = fl_energy
 
         fl_rms_load = fl_rms_load / self.duration_h
         self.fl_rms_load = fl_rms_load
         self.percentage_overload = 100 * fl_rms_load / fl_power_limit
-        
+
+        # TODO: Ramping should really be calculated from the first timestamp before peak where only load increases are observed
+        # As in, the power could actually decrease from the time of dt_start, while ramping should be calculated from
+        # the first time it only is increasing.
         spike_dur = ts_overload_event[np.argmax(ts_overload_event[:,1]),0] - self.dt_start
         spike_dur_h = util.duration_to_hours(spike_dur)
         self.fl_ramping = (np.max(ts_overload_event[:,1]) - fl_power_limit)/spike_dur_h if spike_dur_h else -1
 
     def __str__(self):
-        return "Overload Event with properties:\n"                                  + \
-            "Start              :     " + str(self.dt_start)            + "   \n"      + \
-            "End                :     " + str(self.dt_end)              + "   \n"      + \
-            "Duration           :     " + str(self.dt_duration)         + "   \n"      + \
-            "------------\n"                                                        + \
-            "Spike over limit   :     " + str(self.fl_spike)            + "   kW\n"      + \
-            "RMS load           :     " + str(self.fl_rms_load)         + "   kW\n"      + \
-            "Energy over limit  :     " + str(self.fl_MWh)              + "   kWh\n"      + \
-            "% Overload         :     " + str(self.percentage_overload) + "   %\n"  + \
-            "Ramping            :     " + str(self.fl_ramping)          + "   kW/h\n"
-
+        return (
+            "Overload Event with properties:\n"
+            + "Start              :     "
+            + str(self.dt_start)
+            + "   \n"
+            + "End                :     "
+            + str(self.dt_end)
+            + "   \n"
+            + "Duration           :     "
+            + str(self.duration_h)
+            + "   \n"
+            + "------------\n"
+            + "Spike over limit   :     "
+            + str(self.fl_spike)
+            + "   kW\n"
+            + "RMS load           :     "
+            + str(self.fl_rms_load)
+            + "   kW\n"
+            + "Energy over limit  :     "
+            + str(self.fl_surplus_energy_MWh)
+            + "   kWh\n"
+            + "% Overload         :     "
+            + str(self.percentage_overload)
+            + "   %\n"
+            + "Ramping            :     "
+            + str(self.fl_ramping)
+            + "   kW/h\n"
+        )
 
     def is_unimportant(self):
         # TODO: Other ways of characterizing "unimportant load"
-        dur_hours = util.duration_to_hours(self.dt_duration)
-        if dur_hours == 1:
+        if self.duration_h == 1:
             b_short = True
         else:
             b_short = False
@@ -86,9 +123,9 @@ class FlexibilityNeed:
     def extract_arrays(self):
         arrs = {}
         l_overloads = self.l_overloads
-        
+
         arrs["spike"] = np.array([o.fl_spike for o in l_overloads])
-        arrs["energy"] = np.array([o.fl_MWh for o in l_overloads])
+        arrs["energy"] = np.array([o.fl_surplus_energy_MWh for o in l_overloads])
         arrs["duration"] = np.array([o.duration_h for o in l_overloads])
         arrs["season"] = np.array([util.datetime_to_season(o.dt_start) for o in l_overloads])
         arrs["month"] = np.array([o.dt_start.month for o in l_overloads])
