@@ -70,10 +70,7 @@ class OverloadEvent:
             fl_dur = util.duration_to_hours(dt_dur)
             fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
             
-        #     fl_energy += fl_max_overload * fl_dur
-        #     fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
         self.fl_surplus_energy_MWh = fl_energy
-
         fl_rms_load = fl_rms_load / self.duration_h
         self.fl_rms_load = fl_rms_load
         self.percentage_overload =(100 * fl_rms_load / fl_power_limit) if fl_power_limit != 0 else -1 
