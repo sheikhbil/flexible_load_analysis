@@ -56,6 +56,7 @@ class OverloadEvent:
             for timestamp, load in ts_overload_event:
                 if load > fl_power_limit:
                     fl_energy += (load - fl_power_limit) * widths_for_equally_spaced_timestamps
+                fl_rms_load += load * widths_for_equally_spaced_timestamps
                 
         else:
             if all_timestamp_widths is None:
@@ -63,13 +64,8 @@ class OverloadEvent:
             for power, width in zip(ts_overload_event[:, 1], all_timestamp_widths):
                 if power > fl_power_limit:
                     fl_energy += (power - fl_power_limit)*width
-         
-        for i in range(1, len(ts_overload_event)):  # Max Riemann-sum
-            # Can be simplified if hour-requirement is assumed
-            dt_dur = (ts_overload_event[i, 0] - ts_overload_event[i - 1, 0])
-            fl_dur = util.duration_to_hours(dt_dur)
-            fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
-            
+                fl_rms_load += power * width
+
         self.fl_surplus_energy_MWh = fl_energy
         fl_rms_load = fl_rms_load / self.duration_h
         self.fl_rms_load = fl_rms_load
