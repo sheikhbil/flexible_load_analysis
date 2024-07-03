@@ -53,36 +53,30 @@ class OverloadEvent:
         fl_rms_load = 0
 
         if equal_timestamp_spacing:
-            for load in ts_overload_event:
+            for timestamp, load in ts_overload_event:
                 if load > fl_power_limit:
-                    fl_energy += (load - fl_power_limit) 
-        
+                    fl_energy += (load - fl_power_limit) * widths_for_equally_spaced_timestamps
+                
         else:
             if all_timestamp_widths is None:
                 raise ValueError("the list of timestamp widths must be provided when equal_timestamp_spacing is False.")
-            for power, width in zip(np.max(ts_overload_event[:, 1] - fl_power_limit, 0), all_timestamp_widths):
-                fl_energy += power*width
-
-        # for i in range(1, len(ts_overload_event)):  # Max Riemann-sum
-        #     fl_max_load_surplus = (
-        #         max(ts_overload_event[i - 1, 1], ts_overload_event[i, 1])
-        #         - fl_power_limit
-        #     )
-        #     fl_max_overload = max(
-        #         fl_max_load_surplus, 0
-        #     )  # Negative overload (surplus capacity) not considered
-
-        #     # Can be simplified if hour-requirement is assumed
-        #     dt_dur = (ts_overload_event[i, 0] - ts_overload_event[i - 1, 0])
-        #     fl_dur = util.duration_to_hours(dt_dur)
-
+            for power, width in zip(ts_overload_event[:, 1], all_timestamp_widths):
+                if power > fl_power_limit:
+                    fl_energy += (power - fl_power_limit)*width
+         
+        for i in range(1, len(ts_overload_event)):  # Max Riemann-sum
+            # Can be simplified if hour-requirement is assumed
+            dt_dur = (ts_overload_event[i, 0] - ts_overload_event[i - 1, 0])
+            fl_dur = util.duration_to_hours(dt_dur)
+            fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
+            
         #     fl_energy += fl_max_overload * fl_dur
         #     fl_rms_load += ts_overload_event[i - 1, 1] * fl_dur
         self.fl_surplus_energy_MWh = fl_energy
 
         fl_rms_load = fl_rms_load / self.duration_h
         self.fl_rms_load = fl_rms_load
-        self.percentage_overload =(100 * fl_rms_load / fl_power_limit if fl_power_limit != 0 else -1) 
+        self.percentage_overload =(100 * fl_rms_load / fl_power_limit) if fl_power_limit != 0 else -1 
 
         # TODO: Ramping should really be calculated from the first timestamp before peak where only load increases are observed
         # As in, the power could actually decrease from the time of dt_start, while ramping should be calculated from
